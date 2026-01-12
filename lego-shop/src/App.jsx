@@ -81,7 +81,7 @@ export default function App() {
       </main>
 
       <footer className="footer">
-        LEGO Webshop Demo – React, Props &amp; Callbacks
+        LEGO Webshop DHANE
       </footer>
     </div>
   );
