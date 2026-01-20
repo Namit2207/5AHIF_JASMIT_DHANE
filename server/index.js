@@ -9,13 +9,17 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// --------------------
 // 1) MongoDB verbinden
+// --------------------
 mongoose
     .connect(process.env.MONGODB_URI)
-    .then(() => console.log(" MongoDB connected"))
-    .catch((err) => console.log("❌ MongoDB error:", err.message));
+    .then(() => console.log("MongoDB connected"))
+    .catch((err) => console.log(" MongoDB error:", err));
 
-// 2) Models (einfach gehalten)
+// --------------------
+// 2) Models
+// --------------------
 const productSchema = new mongoose.Schema({
     name: String,
     price: Number,
@@ -35,145 +39,99 @@ const cartSchema = new mongoose.Schema({
 
 const Cart = mongoose.model("Cart", cartSchema);
 
-// Hilfsfunktion: wir verwenden EINE Cart-Collection mit einem einzigen Cart-Dokument
 async function getOrCreateCart() {
     let cart = await Cart.findOne();
-    if (!cart) {
-        cart = await Cart.create({ items: [] });
-    }
+    if (!cart) cart = await Cart.create({ items: [] });
     return cart;
 }
 
-// 3) ROUTES / ENDPOINTS
-
-// Test-Route (optional)
+// --------------------
+// 3) Routes
+// --------------------
 app.get("/", (req, res) => {
-    res.send("LEGO Server läuft git rm -r --cached lego-shop/node_modules\n" +
-        "git rm -r --cached lego-server/node_modules\n");
+    res.send("LEGO Server läuft");
 });
 
 // GET Produkte
 app.get("/api/products", async (req, res) => {
-    try {
-        const products = await Product.find();
-        res.json(products);
-    } catch (err) {
-        res
-            .status(500)
-            .json({ message: "Error loading products", error: err.message });
-    }
+    const products = await Product.find();
+    res.json(products);
 });
 
-// POST Seed (einmalig, um Produkte in DB zu speichern)
+// POST: Demo-Produkte in DB schreiben
 app.post("/api/seed", async (req, res) => {
-    try {
-        await Product.deleteMany();
+    await Product.deleteMany();
 
-        const demoProducts = [
-            {
-                name: "City Police Station",
-                price: 89.99,
-                image:
-                    "https://www.lego.com/cdn/cs/set/assets/blt4a1e324a58b9981e/60246_alt1.png",
-            },
-            {
-                name: "City Fire Truck",
-                price: 24.99,
-                image:
-                    "https://www.lego.com/cdn/cs/set/assets/blt912fb5b1a9ad7b7b/60280_alt1.png",
-            },
-            {
-                name: "City Passenger Train",
-                price: 149.99,
-                image:
-                    "https://www.lego.com/cdn/cs/set/assets/blt1f4d7e6b7c8e64b5/60197_alt1.png",
-            },
-        ];
+    const demoProducts = [
+        {
+            name: "City Police Station",
+            price: 89.99,
+            image:
+                "https://www.lego.com/cdn/cs/set/assets/blt4a1e324a58b9981e/60246_alt1.png",
+        },
+        {
+            name: "City Fire Truck",
+            price: 24.99,
+            image:
+                "https://www.lego.com/cdn/cs/set/assets/blt912fb5b1a9ad7b7b/60280_alt1.png",
+        },
+        {
+            name: "City Passenger Train",
+            price: 149.99,
+            image:
+                "https://www.lego.com/cdn/cs/set/assets/blt1f4d7e6b7c8e64b5/60197_alt1.png",
+        },
+    ];
 
-        const inserted = await Product.insertMany(demoProducts);
-        res.json({ message: "Seed done ", inserted });
-    } catch (err) {
-        res.status(500).json({ message: "Seed failed", error: err.message });
-    }
+    const inserted = await Product.insertMany(demoProducts);
+    res.json({ message: "Seed done", inserted });
 });
 
-// GET Warenkorb (mit Produktinfos via populate)
+// GET Warenkorb (mit Produktdaten)
 app.get("/api/cart", async (req, res) => {
-    try {
-        const cart = await getOrCreateCart();
-        const populatedCart = await cart.populate("items.productId");
-        res.json(populatedCart);
-    } catch (err) {
-        res.status(500).json({ message: "Error loading cart", error: err.message });
-    }
+    const cart = await getOrCreateCart();
+    const fullCart = await Cart.findById(cart._id).populate("items.productId");
+    res.json(fullCart);
 });
 
 // POST add to cart { productId }
 app.post("/api/cart/add", async (req, res) => {
-    try {
-        const { productId } = req.body;
+    const { productId } = req.body;
 
-        if (!productId) {
-            return res.status(400).json({ message: "productId is missing" });
-        }
+    const cart = await getOrCreateCart();
+    const existing = cart.items.find((it) => it.productId.toString() === productId);
 
-        const cart = await getOrCreateCart();
+    if (existing) existing.quantity += 1;
+    else cart.items.push({ productId, quantity: 1 });
 
-        const existing = cart.items.find(
-            (it) => it.productId.toString() === productId
-        );
+    await cart.save();
 
-        if (existing) {
-            existing.quantity += 1;
-        } else {
-            cart.items.push({ productId, quantity: 1 });
-        }
-
-        await cart.save();
-        const populatedCart = await cart.populate("items.productId");
-        res.json(populatedCart);
-    } catch (err) {
-        res.status(500).json({ message: "Error adding to cart", error: err.message });
-    }
+    const fullCart = await Cart.findById(cart._id).populate("items.productId");
+    res.json(fullCart);
 });
 
 // POST remove one { productId }
 app.post("/api/cart/remove", async (req, res) => {
-    try {
-        const { productId } = req.body;
+    const { productId } = req.body;
 
-        if (!productId) {
-            return res.status(400).json({ message: "productId is missing" });
+    const cart = await getOrCreateCart();
+    const existing = cart.items.find((it) => it.productId.toString() === productId);
+
+    if (existing) {
+        existing.quantity -= 1;
+        if (existing.quantity <= 0) {
+            cart.items = cart.items.filter((it) => it.productId.toString() !== productId);
         }
-
-        const cart = await getOrCreateCart();
-
-        const existing = cart.items.find(
-            (it) => it.productId.toString() === productId
-        );
-
-        if (existing) {
-            existing.quantity -= 1;
-
-            if (existing.quantity <= 0) {
-                cart.items = cart.items.filter(
-                    (it) => it.productId.toString() !== productId
-                );
-            }
-        }
-
-        await cart.save();
-        const populatedCart = await cart.populate("items.productId");
-        res.json(populatedCart);
-    } catch (err) {
-        res
-            .status(500)
-            .json({ message: "Error removing from cart", error: err.message });
     }
+
+    await cart.save();
+
+    const fullCart = await Cart.findById(cart._id).populate("items.productId");
+    res.json(fullCart);
 });
 
-// 4) Server starten
+// --------------------
+// 4) Start
+// --------------------
 const port = process.env.PORT || 3001;
-app.listen(port, () => {
-    console.log(` Server running on http://localhost:${port}`);
-});
+app.listen(port, () => console.log(`Server: http://localhost:${port}`));
