@@ -48,7 +48,8 @@ async function getOrCreateCart() {
 
 // Test-Route (optional)
 app.get("/", (req, res) => {
-    res.send("LEGO Server läuft ");
+    res.send("LEGO Server läuft git rm -r --cached lego-shop/node_modules\n" +
+        "git rm -r --cached lego-server/node_modules\n");
 });
 
 // GET Produkte

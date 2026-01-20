@@ -3,3 +3,22 @@
 /workspace.xml
 # Editor-based HTTP Client requests
 /httpRequests/
+# Dependencies
+node_modules/
+
+# Env files
+.env
+
+# Build
+dist/
+build/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
